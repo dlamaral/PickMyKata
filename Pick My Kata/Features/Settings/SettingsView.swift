@@ -9,89 +9,137 @@ import SwiftUI
 import SwiftData
 
 struct SettingsView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
     
-    // 1. We own the ViewModel for this view.
+    // We use StateObject so the ViewModel lives as long as the View
     @StateObject private var viewModel = SettingsViewModel()
     
-    // 2. We use @Query to find the UserSettings object that
-    //    was created and saved by the GeneratorView.
-    //    We know this will return an array, but we only
-    //    ever expect one object in it.
-    @Query private var settingsQuery: [UserSettings]
+    // -- STATE FOR ALERT ---
+    @State private var showResetAlert: Bool = false
     
     var body: some View {
-        // 3. A Form is the standard SwiftUI container for settings.
-        Form {
-            
-            // 4. Section 1: The Style Selector
-            Section(header: Text("Select Style")) {
-                Picker("Style", selection: $viewModel.selectedStyle) {
-                    ForEach(viewModel.allStyles, id: \.self) { style in
-                        Text(style.displayName).tag(style)
+        NavigationStack {
+            Form {
+                // --- Section 1: Preferences ---
+                Section(header: Text("Daily Goals")) {
+                    // 1. Daily Target Slider
+                    VStack(alignment: .leading) {
+                        Text("Daily Target: \(Int(viewModel.dailyKataTarget)) Kata")
+                        Slider(value: $viewModel.dailyKataTarget, in: 1...5, step: 1)
+                    }
+                    .padding(.vertical, 4)
+                    
+                    // 2. Daily Reminder Toggle
+                    Toggle(isOn: $viewModel.dailyReminderEnabled) {
+                        Label("Daily Reminder", systemImage: "bell.fill")
+                    }
+                    
+                    // 3. Sound Effects Toggle
+                    Toggle(isOn: $viewModel.soundEffectsEnabled) {
+                        Label("Sound Effects", systemImage: "speaker.wave.2.fill")
                     }
                 }
-                .pickerStyle(.segmented)
-            }
-            
-            // 5. Section 2: The Kata Exclusion List
-            Section(header: Text("Manage Active Katas")) {
-                // We list all katas for the selected style.
-                ForEach(viewModel.kataList, id: \.self) { kata in
-                    
-                    // We make each row a button to toggle its status.
-                    Button(action: {
-                        viewModel.toggleExclusion(for: kata)
-                    }) {
-                        HStack {
-                            Text(kata)
-                                .foregroundStyle(.primary) // Keep text black
+                
+                // --- Section 2: Karate Style ---
+                Section(header: Text("Karate Style")) {
+                    Picker("Selected Style", selection: $viewModel.selectedStyle) {
+                        ForEach(viewModel.allStyles, id: \.self) { style in
+                            Text(style.displayName).tag(style)
+                        }
+                    }
+                    .pickerStyle(.navigationLink)
+                }
+                
+                // --- Section 3: Kata Selection (Exclusions) ---
+                Section(header: Text("Select Katas to Practice")) {
+                    if viewModel.kataList.isEmpty {
+                        Text("No katas available for this style.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(viewModel.kataList) { kata in
+                            // Create a binding to the exclusion status
+                            let isIncluded = Binding<Bool>(
+                                get: { !viewModel.isKataExcluded(kata.name) },
+                                set: { _ in viewModel.toggleExclusion(for: kata.name) }
+                            )
                             
-                            Spacer()
-                            
-                            // 6. Show a checkmark ONLY if the kata
-                            //    is NOT excluded.
-                            if !viewModel.isKataExcluded(kata) {
-                                Image(systemName: "checkmark")
-                                    .foregroundStyle(.blue)
+                            Toggle(isOn: isIncluded) {
+                                Text(kata.name)
                             }
                         }
                     }
                 }
+                .tint(.red) // Toggles turn Red when ON
+                
+                // --- Section 4: About ---
+                Section(header: Text("About")) {
+                    HStack {
+                        Text("Version")
+                        Spacer()
+                        Text("1.0.0")
+                            .foregroundStyle(.secondary)
+                    }
+                    Link(destination: URL(string: "mailto:dlamaral12@gmail.com?subject=Pick My Kata Feedback/Feature Request")!) {
+                        HStack {
+                            Text("Contact Developer")
+                                .foregroundStyle(.primary) // Keep text standard color
+                            Spacer()
+                            Image(systemName: "envelope.fill")
+                                .foregroundStyle(.blue)
+                        }
+                    }
+                }
+                
+                // --- Section 5: Danger Zone ---
+                Section {
+                    Button {
+                        showResetAlert = true
+                    } label: {
+                        HStack {
+                            Text("Reset Progress")
+                            Spacer()
+                            Image(systemName: "trash")
+                        }
+                        .foregroundStyle(.red)
+                    }
+                } footer: {
+                    Text("This will delete all practice logs and streaks.")
+                }
             }
-        }
-        .navigationTitle("Settings")
-        .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            // 7. When the view appears, we find our settings object
-            //    from the query and pass it to the ViewModel
-            //    so it can load the correct data.
-            if let settings = settingsQuery.first {
-                viewModel.loadData(settings: settings)
-            } else {
-                // This is an error state, but should be impossible
-                // if the GeneratorView has loaded at least once.
-                print("FATAL ERROR: Could not find UserSettings in SettingsView.")
+            .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+            .onAppear {
+                viewModel.loadData(context: modelContext)
+            }
+            // -- DANGER ZONE ALERT LOGIC ---
+            .alert("Are you sure?", isPresented: $showResetAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Reset Everything", role: .destructive) {
+                    viewModel.resetProgress()
+                    // Haptic feedback for the delete action
+                    let generator = UINotificationFeedbackGenerator()
+                    generator.notificationOccurred(.warning)
+                }
+            } message: {
+                Text("This action will delete all of your progres and cannot be reversed. Are you sure you want to proceed?")
             }
         }
     }
 }
 
 #Preview {
-    // We create a mock in-memory container for the preview
+    // Helper to preview with in-memory container
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(for: UserSettings.self, configurations: config)
+    let container = try! ModelContainer(for: UserSettings.self, PracticeLog.self, configurations: config)
     
-    // Create and insert a sample settings object for the preview to use
-    let sampleSettings = UserSettings(
-        selectedStyle: KarateStyle.shotokan.rawValue,
-        exclusionList: [
-            StyleExclusion(styleName: "Shotokan", excludedKatas: ["Heian Nidan"])
-        ]
-    )
-    container.mainContext.insert(sampleSettings)
-    
-    return NavigationStack {
-        SettingsView()
-    }
-    .modelContainer(container) // Inject the container into the preview
+    return SettingsView()
+        .modelContainer(container)
 }

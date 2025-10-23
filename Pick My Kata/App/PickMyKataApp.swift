@@ -8,36 +8,48 @@
 import SwiftUI
 import SwiftData
 
+// MARK: - App Entry
+// Configures SwiftData with a versioned schema and migration plan.
+// Decides between Onboarding and the main Generator flow using @AppStorage.
 @main
 struct PickMyKataApp: App {
+    
+    // 1. Check if the user has finished onboarding
+    @AppStorage("hasCompletedOnboarding") var hasCompletedOnboarding: Bool = false
 
-    // 1. This creates the shared SwiftData database container.
-    // It's configured to manage our 'UserSettings' and 'PracticeLog' model.
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            UserSettings.self,
-            PracticeLog.self
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
+    let container: ModelContainer
+    
+    init() {
         do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            // Build the latest schema and pass it to the model container (with migration plan).
+            // 1. Create a Schema object from our V2 definition
+            let schema = Schema(versionedSchema: PickMyKataSchemaV2.self)
+            
+            // 2. Pass that 'schema' object to the container
+            container = try ModelContainer(
+                for: schema,
+                migrationPlan: PickMyKataMigrationPlan.self
+            )
+            // -------------------
         } catch {
-            fatalError("Could not create ModelContainer: \(error)")
+            fatalError("Failed to create ModelContainer: \(error)")
         }
-    }()
-
-    // 2. This is the main body of the app.
+    }
+    
     var body: some Scene {
+        // Root scene: routes to Onboarding until the user completes it, then to Generator.
         WindowGroup {
-            // 3. We use a NavigationStack to allow navigation from the
-            // GeneratorView (root) to the SettingsView.
-            NavigationStack {
-                GeneratorView()
+            // 2. Switch logic
+            if hasCompletedOnboarding {
+                NavigationStack {
+                    GeneratorView()
+                }
+            } else {
+                // No NavigationStack here, Onboarding handles its own flow
+                OnboardingView()
             }
         }
-        // 4. This injects the database into the entire app's environment.
-        // Any view inside this WindowGroup can now access our data.
-        .modelContainer(sharedModelContainer)
+        .modelContainer(container)
     }
 }
+
