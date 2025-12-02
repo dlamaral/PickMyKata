@@ -15,7 +15,7 @@ class AudioService {
     
     private init() {}
     
-    /// Plays a crisp "Tink" sound and a light tap vibration.
+    /// Plays a "Tink" sound and a light tap vibration.
     /// Used when marking a kata as done.
     func playCompletionSound() {
         // System Sound 1057 is a pleasant "Tink"
