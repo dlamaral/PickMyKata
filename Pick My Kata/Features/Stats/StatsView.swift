@@ -48,9 +48,12 @@ struct StatsView: View {
                             
                             // Determine how many items to show
                             let itemsToShow = viewModel.showAllKatas ? viewModel.allMasteryData : Array(viewModel.allMasteryData.prefix(5))
-                            
+                                                       
                             ForEach(itemsToShow) { data in
-                                MasteryRowView(data: data)
+                                NavigationLink(destination: KataDetailView(data: data)) {
+                                    MasteryRowView(data: data)
+                                }
+                                .buttonStyle(PlainButtonStyle())
                             }
                             
                             // 4. The "View All" Button
