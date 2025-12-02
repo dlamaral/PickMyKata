@@ -8,11 +8,11 @@
 import Foundation
 import SwiftData
 
-// 1. We define a 'PersistenceService' struct to act as a
-//    namespace for our persistence logic. It has no
-//    properties and is never initialized.
+// MARK: - PersistenceService
+// Provides helpers to ensure a single UserSettings record exists and is returned to callers.
 public struct PersistenceService {
 
+    // High-level: Return existing UserSettings or create defaults if this is a new install.
     // 2. This is the single, most important function in this file.
     //    It attempts to find the UserSettings. If it can't
     //    (e.g., a new user), it creates the default settings,
@@ -60,3 +60,4 @@ public struct PersistenceService {
         }
     }
 }
+

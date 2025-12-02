@@ -6,8 +6,8 @@
 //
 
 import Foundation
-import SwiftUI
 import SwiftData
+import SwiftUI
 import Combine
 
 @MainActor
@@ -15,113 +15,138 @@ class SettingsViewModel: ObservableObject {
     
     // MARK: - Published Properties
     
-    // 1. We publish the list of all available styles.
-    //    We get this directly from our enum's 'allCases'.
-    @Published var allStyles: [KarateStyle] = KarateStyle.allCases
+    // 1. Daily Reminder Toggle
+    @Published var dailyReminderEnabled: Bool = false {
+        didSet {
+            // Only update DB if changed to avoid redundant writes
+            if userSettings?.dailyReminderEnabled != dailyReminderEnabled {
+                userSettings?.dailyReminderEnabled = dailyReminderEnabled
+                handleReminderToggle(isOn: dailyReminderEnabled)
+            }
+        }
+    }
     
-    // 2. We publish the *currently selected style*.
-    //    The View's Picker will bind directly to this.
+    // 2. Daily Target Slider
+    @Published var dailyKataTarget: Double = 3.0 {
+        didSet {
+            userSettings?.dailyKataTarget = Int(dailyKataTarget)
+        }
+    }
+    
+    // 3. Sound Effects Toggle
+    @Published var soundEffectsEnabled: Bool = false {
+        didSet {
+            userSettings?.soundEffectsEnabled = soundEffectsEnabled
+        }
+    }
+    
+    // 4. Style Selection
     @Published var selectedStyle: KarateStyle = .shotokan {
         didSet {
-            // 3. When the style changes:
-            //    a) Save the new style to our database.
             userSettings?.selectedStyle = selectedStyle.rawValue
-            //    b) Reload the kata list for the new style.
             loadKataList()
         }
     }
     
-    // 4. We publish the list of katas for the 'selectedStyle'.
-    @Published var kataList: [String] = []
+    // 5. Data Lists
+    @Published var allStyles: [KarateStyle] = KarateStyle.allCases
+    @Published var kataList: [Kata] = []
     
     // MARK: - Private Properties
-    
-    // A private reference to the user's settings object from SwiftData.
     private var userSettings: UserSettings?
+    private var modelContext: ModelContext?
+
+    // MARK: - Initialization & Loading
     
-    // MARK: - Public Functions
-    
-    /// Loads the user's settings from the database.
-    /// This should be called from the View's `.onAppear`.
-    /// - Parameter settings: The UserSettings object from the SwiftData query.
-    func loadData(settings: UserSettings) {
+    func loadData(context: ModelContext) {
+        self.modelContext = context
+        let settings = PersistenceService.fetchOrCreateSettings(context: context)
         self.userSettings = settings
         
-        // 5. Set our published style to match what's saved.
-        if let savedStyle = KarateStyle(rawValue: settings.selectedStyle) {
-            self.selectedStyle = savedStyle
-        }
+        // Load values from Database into UI
+        self.selectedStyle = KarateStyle(rawValue: settings.selectedStyle) ?? .shotokan
+        self.dailyReminderEnabled = settings.dailyReminderEnabled
+        self.dailyKataTarget = Double(settings.dailyKataTarget)
+        self.soundEffectsEnabled = settings.soundEffectsEnabled
         
-        // 6. Load the kata list for that style.
         loadKataList()
     }
     
-    /// Checks if a specific kata is in the user's exclusion list.
-    /// The View will call this for each row to show/hide the checkmark.
-    /// - Parameter kata: The name of the kata to check.
-    /// - Returns: 'true' if the kata is excluded, 'false' otherwise.
-    func isKataExcluded(_ kata: String) -> Bool {
-        guard let exclusion = getExclusion(for: selectedStyle) else {
-            // No exclusion object exists for this style,
-            // so the kata cannot be excluded.
-            return false
-        }
-        return exclusion.excludedKatas.contains(kata)
-    }
+    // MARK: - Reminder Logic (Fixed)
     
-    /// Toggles a kata's inclusion/exclusion status.
-    /// This is called when a user taps on a kata row.
-    /// - Parameter kata: The name of the kata to toggle.
-    func toggleExclusion(for kata: String) {
-        guard let settings = userSettings else { return }
-
-        // 7. Find or create the exclusion object for the current style.
-        var exclusion = getExclusion(for: selectedStyle)
-        
-        if exclusion == nil {
-            // No exclusion object exists for this style yet. Create one.
-            let newExclusion = StyleExclusion(styleName: selectedStyle.rawValue, excludedKatas: [])
-            // Insert it into the userSettings.
-            // Note: SwiftData requires we append to the *array*
-            // for the change to be detected.
-            settings.exclusionList.append(newExclusion)
-            // Now get the reference to the one we just added.
-            exclusion = settings.exclusionList.last
-        }
-        
-        guard var exclusion = exclusion else { return }
-
-        // 8. Now, modify the 'excludedKatas' array.
-        if let index = exclusion.excludedKatas.firstIndex(of: kata) {
-            // It IS in the list. Remove it.
-            exclusion.excludedKatas.remove(at: index)
+    private func handleReminderToggle(isOn: Bool) {
+        if isOn {
+            // Use the Shared Singleton
+            NotificationService.shared.requestPermission { [weak self] granted in
+                DispatchQueue.main.async {
+                    if granted {
+                        // Schedule the 7-day queue
+                        NotificationService.shared.scheduleUpcomingReminders(isGoalMetForToday: false)
+                    } else {
+                        // Permission denied, revert UI
+                        self?.dailyReminderEnabled = false
+                    }
+                }
+            }
         } else {
-            // It is NOT in the list. Add it.
-            exclusion.excludedKatas.append(kata)
+            // Cancel everything
+            NotificationService.shared.cancelAllReminders()
         }
-        
-        // 9. We must write the *modified* struct back into the
-        //    userSettings array to persist the change.
-        if let settingIndex = settings.exclusionList.firstIndex(where: { $0.styleName == selectedStyle.rawValue }) {
-            settings.exclusionList[settingIndex] = exclusion
-        }
-        
-        // 10. Manually trigger an objectWillChange.send() to force the
-        //     View to reload its list and update the checkmarks.
-        self.objectWillChange.send()
     }
-
-    // MARK: - Private Helpers
     
-    /// Gets the master kata list for the 'selectedStyle'
-    /// and updates the published 'kataList'.
+    // MARK: - Exclusion Logic (Cleaned Up)
+    
     private func loadKataList() {
         self.kataList = KataProvider.masterList[selectedStyle] ?? []
     }
     
-    /// A helper function to find the 'StyleExclusion' object
-    /// for a given style from our settings.
-    private func getExclusion(for style: KarateStyle) -> StyleExclusion? {
-        return userSettings?.exclusionList.first(where: { $0.styleName == style.rawValue })
+    func isKataExcluded(_ name: String) -> Bool {
+        guard let settings = userSettings else { return false }
+        
+        // Find the exclusion entry for the current style
+        if let entry = settings.exclusionList.first(where: { $0.styleName == selectedStyle.rawValue }) {
+            return entry.excludedKatas.contains(name)
+        }
+        return false
+    }
+    
+    func toggleExclusion(for kataName: String) {
+        guard let settings = userSettings else { return }
+        
+        // Get or Create the exclusion entry
+        var entry: StyleExclusion
+        if let existing = settings.exclusionList.first(where: { $0.styleName == selectedStyle.rawValue }) {
+            entry = existing
+        } else {
+            entry = StyleExclusion(styleName: selectedStyle.rawValue, excludedKatas: [])
+            settings.exclusionList.append(entry)
+        }
+        
+        // Toggle Logic
+        if entry.excludedKatas.contains(kataName) {
+            entry.excludedKatas.removeAll { $0 == kataName }
+        } else {
+            entry.excludedKatas.append(kataName)
+        }
+        
+        // Force UI Refresh
+        self.objectWillChange.send()
+    }
+    
+    // MARK: - Danger Zone
+    
+    func resetProgress() {
+        guard let settings = userSettings else { return }
+        
+        // 1. Wipe Logs
+        settings.practiceLogs.removeAll()
+        
+        // 2. Reset Streaks
+        settings.currentStreak = 0
+        settings.longestStreak = 0
+        settings.lastPracticeDate = Date.distantPast
+        
+        // 3. Force UI Refresh
+        objectWillChange.send()
     }
 }
