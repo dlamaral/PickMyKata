@@ -1,26 +1,26 @@
-Pick My Kata 🥋
+# Pick My Kata 🥋
 
-Master your techniques, one kata at a time.
+### Master your techniques, one kata at a time.
 
 Pick My Kata is a dedicated companion app for Karate practitioners of all levels. Whether you practice Shotokan, Goju-ryu, or Shito-ryu, this app helps you maintain discipline, track your progress, and master your forms through randomized selection and gamified tracking.
 
-Features
+## Features
 
-Random Kata Generator: Filter by style (Shotokan, Goju-ryu, Shito-ryu) and get a random kata to practice.
+### Random Kata Generator: Filter by style (Shotokan, Goju-ryu, Shito-ryu) and get a random kata to practice.
 
-Smart Exclusions: Toggle specific katas on or off in Settings to focus only on what you know.
+### Smart Exclusions: Toggle specific katas on or off in Settings to focus only on what you know.
 
-Progression Tracking: Track your daily streaks, total katas practiced, and personal bests.
+### Progression Tracking: Track your daily streaks, total katas practiced, and personal bests.
 
-Mastery System: Earn ranks from Novice to Grandmaster for every individual kata based on repetition.
+### Mastery System: Earn ranks from Novice to Grandmaster for every individual kata based on repetition.
 
-Video References: Quick links to video demonstrations for supported styles (Shotokan).
+### Video References: Quick links to video demonstrations for supported styles (Shotokan).
 
-Gamification: Level-up celebrations, confetti rewards, and audio feedback to keep you motivated.
+### Gamification: Level-up celebrations, confetti rewards, and audio feedback to keep you motivated.
 
-Dark Mode Support: Fully optimized for late-night practice sessions.
+### Dark Mode Support: Fully optimized for late-night practice sessions.
 
-Privacy Policy
+## Privacy Policy
 
 Effective Date: October 26, 2025
 
@@ -47,6 +47,6 @@ Deleting the App: Uninstalling the application will permanently delete all local
 If you have any questions about this Privacy Policy, please contact us at:
 dlamaral12@gmail.com
 
-Disclaimer
+#### Disclaimer
 
 Pick My Kata is a practice tool. Always consult with a qualified Sensei for proper technique and safety. The developer is not responsible for injuries sustained during practice.
